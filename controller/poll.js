@@ -1,30 +1,38 @@
 const mongoose = require("mongoose");
-
+const express = require("express");
+const app = express();
+// const http = require("http").createServer(app);
+// let io = require("socket.io")(http);
 
 const Vote = require("../models/Vote");
 
-const Pusher = require("pusher");
 
 const keys = require("../config/keys");
-var pusher = new Pusher({
-    appId: keys.pusherAppId,
-    key: keys.pusherKey,
-    secret: keys.pusherSecret,
-    cluster: keys.pusherCluster,
-    encrypted: keys.pusherEncrypted,
-  });
+
 module.exports={
-    form:(req,res)=>{
+    formget:(req,res)=>{
+        res.render('index');
+    },
+    formpost:(req,res)=>{ 
         // validation of title by creating index and using if(err.code==1100)
-        const{title,question,option}=req.body
+        let{title,question,option}=req.body
         var choice=[];
         for (let index = 0; index < option.length; index++) {
             choice.push({opt:option[index]})
         }
-        new Vote({title,question,choice})
-            .save()
+        const newVote=new Vote({title,question,choice})
+            newVote.save()
             .then((data)=>{
-                res.redirect(`/poll/${data.title}`);
+                if(!!data)
+                {
+                    console.log(data);
+                    res.render('poll',{
+                        title:data.title,
+                        question:data.question,
+                        choice:data.choice
+                    })
+                }
+                
             })
             .catch(err=>{
                 console.log(err);
@@ -32,13 +40,28 @@ module.exports={
         // Vote.find().then((votes) => res.json({ success: true, votes: votes }));
     },
     pollget:(req,res)=>{
+        // socket 
+          req.io.on('connection',(socket)=>{
+              console.log('new user connected');
+            //   param from frontend
+              socket.on('join',(param)=>{
+                //   change in id or title
+                  socket.join(req.params.title)
+              })
+          })
         Vote.findOne({title:req.params.title})
             .then((data)=>{
                 if(!!data)
                 {
-                    return res.json({msg:'success',vote:data})
+                   
+                    return res.render('poll',{
+                        title:data.title,
+                        question:data.question,
+                        choice:data.choice
+                    })
                 }
-                return res.status(404).json({msg:"not such poll existes"})
+                // req.flash('err_msg','not such poll existes')
+                return res.redirect('/')
                 
             })
             .catch((err)=>{
@@ -47,16 +70,27 @@ module.exports={
             })
     },
     pollpost:(req,res)=>{
-        const{checked}=req.body;
-        Vote.updateOne({'choice.opt':checked},{$inc:{"choice.$.vote":1}})
+        const{checked,title}=req.body;
+        // that title should be id or title
+        // plz dont change this as it is searching for checked option 
+        Vote.findOneAndUpdate({'choice.opt':checked},{$inc:{"choice.$.vote":1}})
             .then(data=>{
-                if(data)
-                {
-                    // pusher
-                    return res.json({ success: true, message: "Thank you for voting" });
-                }
-                    return res.json({msg:'fail to update'});
+                    // socket
+                    console.log(data);
+                    // choice will be arrsay of choice in db
+                    // title or id
+                    // .to() should be same as socket.join()
+                     req.io.to(title).emit('voteCount',{
+                        // send filter data
+                        choice:data.choice
+                    });
+                    res.json({msg:'success'}) 
             })
-            .catch((err)=>{throw err});
+            .catch((err)=>{
+                // flash msg
+                // room is the parameter so make it global ok;
+               return  res.json({msg:'fail'})
+                // res.redirect(`/poll/${room}`)
+            });
     }
 }

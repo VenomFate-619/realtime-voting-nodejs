@@ -3,7 +3,7 @@ const question_input=$("#question_div input,#title_div input");
 const option_input=$("#options .option input");
 const add=$("#main form>p i");
 const options=$("#options");
-var url=`http://localhost:3000/`
+var url=`http://localhost:8080/`
 
 
 $(question_input).on("focus",function()
@@ -100,6 +100,11 @@ $(submit).on("click",function(e)
         "Content-Type": "application/json",
       }),
 
+  })
+  .then(res=>res.json())
+  .then((data)=>{
+    window.location.href=`/poll/${title}`
+    
   })
   .catch((err) => console.log(err));
   
